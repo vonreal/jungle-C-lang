@@ -1,0 +1,14 @@
+# macOS
+.DS_Store
+
+# Compiled C binaries (no extension)
+# Add filenames here as you compile new executables
+exam-c-lang/wc
+exam-c-lang/gl
+exam-c-lang/.cph
+
+# Binary / object files
+*.bin
+*.o
+*.out
+a.out
