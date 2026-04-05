@@ -104,7 +104,42 @@ int main()
 ////////////////////////////////////////////////////////////
 int balanced(char *expression)
 {
-/* add your code here */
+	int i, c = 0;
+	
+	LinkedList ll;
+	Stack s;
+	
+	ll.head = NULL;
+	ll.size = 0;
+	
+	s.ll = ll;
+	
+	while ((c = expression[i]) != '\0') {
+		if (c == '(' || c == '{' || c == '[')
+			push(&s, c);
+		
+		else
+		{
+			if (isEmptyStack(&s)) return 1;
+			
+			int diff = pop(&s);
+			switch (c)
+			{
+				case ')':
+					if (diff != '(') return 1;
+					break;
+				case '}':
+					if (diff != '{') return 1;
+					break;
+				case ']':
+					if (diff != '[') return 1;
+					break;
+			}
+		}
+		i++;
+	}
+	if (!isEmptyStack(&s)) return 1;
+	return 0;
 }
 
 ////////////////////////////////////////////////////////////
