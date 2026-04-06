@@ -103,7 +103,19 @@ int main()
 
 int isStackPairwiseConsecutive(Stack *s)
 {
-  /* add your code here */
+	if (s == NULL || isEmptyStack(s) || s->ll.size % 2 != 0)
+		return 0;
+	
+	int first, second;
+	
+	while (!isEmptyStack(s))
+	{
+		first = pop(s);
+		second = pop(s);
+		if (abs(first - second) == 1)
+			return 0;
+	}
+	return 1;
 }
 
 //////////////////////////////////////////////////////////////////////////////////
