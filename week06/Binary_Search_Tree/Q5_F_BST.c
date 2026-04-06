@@ -11,21 +11,23 @@ Purpose: Implementing the required functions for Question 5
 
 //////////////////////////////////////////////////////////////////////////////////
 
-typedef struct _bstnode{
+typedef struct _bstnode
+{
 	int item;
 	struct _bstnode *left;
 	struct _bstnode *right;
-} BSTNode;   // You should not change the definition of BSTNode
+} BSTNode; // You should not change the definition of BSTNode
 
-typedef struct _stackNode{
+typedef struct _stackNode
+{
 	BSTNode *data;
 	struct _stackNode *next;
-}StackNode; // You should not change the definition of StackNode
+} StackNode; // You should not change the definition of StackNode
 
 typedef struct _stack
 {
 	StackNode *top;
-}Stack; // You should not change the definition of Stack
+} Stack; // You should not change the definition of Stack
 
 ///////////////////////// function prototypes ////////////////////////////////////
 
@@ -39,7 +41,7 @@ BSTNode *pop(Stack *s);
 BSTNode *peek(Stack *s);
 int isEmpty(Stack *s);
 void removeAll(BSTNode **node);
-BSTNode* removeNodeFromTree(BSTNode *root, int value);
+BSTNode *removeNodeFromTree(BSTNode *root, int value);
 
 ///////////////////////////// main() /////////////////////////////////////////////
 
@@ -48,14 +50,13 @@ int main()
 	int c, i;
 	c = 1;
 
-	//Initialize the Binary Search Tree as an empty Binary Search Tree
-	BSTNode * root;
+	// Initialize the Binary Search Tree as an empty Binary Search Tree
+	BSTNode *root;
 	root = NULL;
 
 	printf("1: Insert an integer into the binary search tree;\n");
 	printf("2: Print the post-order traversal of the binary search tree;\n");
 	printf("0: Quit;\n");
-
 
 	while (c != 0)
 	{
@@ -81,7 +82,6 @@ int main()
 			printf("Choice unknown;\n");
 			break;
 		}
-
 	}
 
 	return 0;
@@ -89,25 +89,53 @@ int main()
 
 //////////////////////////////////////////////////////////////////////////////////
 
+/*
+	left = 탐색용
+	right = 출력 순서 뒤집는 저장용
+*/
 void postOrderIterativeS2(BSTNode *root)
 {
-	 /* add your code here */
+	if (root == NULL)
+		return;
+
+	Stack left, right;
+	left.top = NULL;
+	right.top = NULL;
+
+	push(&left, root);
+	while (!isEmpty(&left))
+	{
+		BSTNode *peek_node = pop(&left);
+		push(&right, peek_node);
+
+		if (peek_node->left != NULL)
+			push(&left, peek_node->left);
+
+		if (peek_node->right != NULL)
+			push(&left, peek_node->right);
+	}
+
+	while (!isEmpty(&right))
+		printf("%d ", pop(&right)->item);
 }
 
 /* Given a binary search tree and a key, this function
    deletes the key and returns the new root. Make recursive function. */
-BSTNode* removeNodeFromTree(BSTNode *root, int value)
+BSTNode *removeNodeFromTree(BSTNode *root, int value)
 {
 	/* add your code here */
+	return root;
 }
 ///////////////////////////////////////////////////////////////////////////////
 
-void insertBSTNode(BSTNode **node, int value){
+void insertBSTNode(BSTNode **node, int value)
+{
 	if (*node == NULL)
 	{
 		*node = malloc(sizeof(BSTNode));
 
-		if (*node != NULL) {
+		if (*node != NULL)
+		{
 			(*node)->item = value;
 			(*node)->left = NULL;
 			(*node)->right = NULL;
@@ -119,7 +147,7 @@ void insertBSTNode(BSTNode **node, int value){
 		{
 			insertBSTNode(&((*node)->left), value);
 		}
-		else if (value >(*node)->item)
+		else if (value > (*node)->item)
 		{
 			insertBSTNode(&((*node)->right), value);
 		}
@@ -130,7 +158,7 @@ void insertBSTNode(BSTNode **node, int value){
 
 //////////////////////////////////////////////////////////////////////////////////
 
-void push(Stack *stack, BSTNode * node)
+void push(Stack *stack, BSTNode *node)
 {
 	StackNode *temp;
 
@@ -152,11 +180,10 @@ void push(Stack *stack, BSTNode * node)
 	}
 }
 
-
-BSTNode * pop(Stack * s)
+BSTNode *pop(Stack *s)
 {
 	StackNode *temp, *t;
-	BSTNode * ptr;
+	BSTNode *ptr;
 	ptr = NULL;
 
 	t = s->top;
@@ -173,7 +200,7 @@ BSTNode * pop(Stack * s)
 	return ptr;
 }
 
-BSTNode * peek(Stack * s)
+BSTNode *peek(Stack *s)
 {
 	StackNode *temp;
 	temp = s->top;
@@ -190,7 +217,6 @@ int isEmpty(Stack *s)
 	else
 		return 0;
 }
-
 
 void removeAll(BSTNode **node)
 {
