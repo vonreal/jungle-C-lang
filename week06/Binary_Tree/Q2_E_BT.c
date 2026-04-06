@@ -99,15 +99,11 @@ int main()
 
 int maxHeight(BTNode *node)
 {
-    int left, right;
-    left = 0;
-    right = 0;
-
     if (node == NULL)
         return -1;
 
-    left += maxHeight(node->left);
-    right += maxHeight(node->right);
+    int left = maxHeight(node->left);
+    int right = maxHeight(node->right);
 
     if (left > right)
         return left + 1;
