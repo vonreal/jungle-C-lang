@@ -35,16 +35,15 @@ team_t team = {
     ""};
 
 /* single word (4) or double word (8) alignment */
-#define ALIGNMENT 8
-#define DOUBLE_WORD_SIZE 8
 #define WORD_SIZE 4
+#define DOUBLE_WORD_SIZE 8
+#define ALIGNMENT 8
 
 /* rounds up to the nearest multiple of ALIGNMENT */
 #define ALIGN(size) (((size) + (ALIGNMENT - 1)) & ~0x7)
 
-#define SIZE_T_SIZE (ALIGN(sizeof(size_t))) // size_t = 현재 8바이트임. 8바이트를 8의배수로 정렬하겠다! (헤더+푸터 사이즈)
-
-#define CHUNKSIZE (1 << 12)
+/* header (4B) + footer (4B) */
+#define SIZE_T_SIZE (ALIGN(sizeof(size_t)))
 
 #define PUT(bp, val) (*(unsigned int *)(bp) = (val))
 
@@ -68,7 +67,6 @@ char *heap_listp;
  */
 int mm_init(void)
 {
-    // 1. 4 word 초기화하기
     if ((heap_listp = mem_sbrk(4 * WORD_SIZE)) == (void *)-1)
         return -1;
 
@@ -79,28 +77,22 @@ int mm_init(void)
 
     heap_listp += (2 * WORD_SIZE); // 푸터의 시작주소로 이동
 
-    // if (heap_listp = extend_heap(CHUNKSIZE / WORD_SIZE) == NULL) // 4096
-    //     return -1;
-
     return 0;
 }
 
 /*
- * extend_heap - CHUNKSIZE만큼 늘린다.
+ * extend_heap - header + words + padding + footer 사이즈만큼 늘린다.
  */
-void *extend_heap(size_t words)
+void *extend_heap(size_t asize)
 {
-    // size_t asize = WORD_SIZE * ALIGN(words); // mm_init에서 초기화했을때
-    size_t asize = ALIGN(words + SIZE_T_SIZE);
-
     void *bp;
+
     if ((bp = mem_sbrk(asize)) == (void *)-1)
         return NULL;
 
     PUT(HDRP(bp), PATCH(asize, 0));         // 기존 에필로그 헤더 덮어씌우기
-    PUT(FDRP(bp + asize), PATCH(asize, 0)); // 푸터로 푸터 값 넣기
+    PUT(FDRP(bp + asize), PATCH(asize, 0)); // 푸터넣기
     PUT(HDRP(bp + asize), PATCH(0, 1));     // 에필로그 헤더 만들기
-    // PUT(HDRP((bp + asize) - 8), PATCH(asize, 0)); // 푸터 만들기
 
     return coalesing(bp);
 }
@@ -169,7 +161,12 @@ void *mm_malloc(size_t size)
         return NULL;
 
     void *p;
-    if ((p = find_fit(size)) == NULL)
+    size_t asize = ALIGN(size + SIZE_T_SIZE);
+
+    if ((p = find_fit(asize)) == NULL)
+        return NULL;
+
+    if ((p = place(p, asize)) == NULL)
         return NULL;
 
     return p;
@@ -177,31 +174,23 @@ void *mm_malloc(size_t size)
 
 /*
  * find_fit - first fit
- * 적합한 블록을 처음 찾으면 바로 넣는다.
+ * 적합한 블록을 발견하면 pointer 반환
  */
-void *find_fit(size_t size)
+void *find_fit(size_t asize)
 {
-    if (size < 1)
+    if (asize < 1)
         return NULL;
 
     void *cur_bp = heap_listp;
-    size_t asize = ALIGN(size + SIZE_T_SIZE);
 
-    while (GET_SIZE(HDRP(cur_bp)) > 0) // cur_bp가 NULL이 아니거나 free block 중에 size가 적합한 블록이 있을 경우
+    while (GET_SIZE(HDRP(cur_bp)) > 0)
     {
         if (GET_SIZE(HDRP(cur_bp)) >= asize && GET_ALLOC(HDRP(cur_bp)) == 0)
-        {
-            if ((cur_bp = place(cur_bp, asize)) == (void *)-1)
-                return NULL;
             return cur_bp;
-        }
         cur_bp = NEXT_BLOCK_PTR(cur_bp);
     }
 
     if ((cur_bp = extend_heap(asize)) == (void *)-1)
-        return NULL;
-
-    if ((cur_bp = place(cur_bp, asize)) == (void *)-1)
         return NULL;
 
     return cur_bp;
@@ -210,7 +199,7 @@ void *find_fit(size_t size)
 void *place(void *bp, size_t asize)
 {
     if (bp == NULL || asize < 1)
-        return (void *)-1;
+        return NULL;
 
     size_t minimum_block_size = 2 * DOUBLE_WORD_SIZE;
     size_t cur_block_size = GET_SIZE(HDRP(bp));
@@ -235,13 +224,9 @@ void *splitting(void *bp, size_t size)
 
     size_t origin_size = GET_SIZE(HDRP(bp));
 
-    // bp의 헤더를 size만큼으로 변경
-    // bp의 푸터를 size만큼으로 변경
     PUT(HDRP(bp), PATCH(size, 0));
     PUT(FTRP(bp), PATCH(size, 0));
 
-    // 그다음 헤더를 남은 사이즈 만큼 free 블록으로 변경
-    // 그다음 푸터를 남은 사이즈 만큼 free 블록으로 변경
     void *next_block = NEXT_BLOCK_PTR(bp);
     PUT(HDRP(next_block), PATCH(origin_size - size, 0));
     PUT(FTRP(next_block), PATCH(origin_size - size, 0));
@@ -272,15 +257,45 @@ void *mm_realloc(void *ptr, size_t size)
 {
     void *oldptr = ptr;
     void *newptr;
-    size_t copySize;
+
+    if (ptr == NULL)
+        return mm_malloc(size);
+
+    if (size == 0)
+    {
+        mm_free(oldptr);
+        return NULL;
+    }
+
+    size_t origin_size = GET_SIZE(HDRP(oldptr));
+    size_t copy_size = ALIGN(size + SIZE_T_SIZE);
+
+    if (origin_size >= copy_size)
+    {
+        void *temp;
+        if ((temp = place(oldptr, copy_size)) != NULL)
+            return temp;
+        return oldptr;
+    }
+    void *next_ptr = NEXT_BLOCK_PTR(oldptr);
+    size_t combined_size = origin_size + GET_SIZE(HDRP(next_ptr));
+
+    if (!GET_ALLOC(HDRP(next_ptr)) && combined_size >= copy_size)
+    {
+        PUT(HDRP(oldptr), PATCH(combined_size, 1));
+        PUT(FTRP(oldptr), PATCH(combined_size, 1));
+        return oldptr;
+    }
 
     newptr = mm_malloc(size);
     if (newptr == NULL)
         return NULL;
-    copySize = *(size_t *)((char *)oldptr - SIZE_T_SIZE);
-    if (size < copySize)
-        copySize = size;
-    memcpy(newptr, oldptr, copySize);
+
+    size_t old_data_size = origin_size - SIZE_T_SIZE;
+    size_t can_copy = (old_data_size < size) ? old_data_size : size;
+    memcpy(newptr, oldptr, can_copy);
+
     mm_free(oldptr);
+
     return newptr;
 }
