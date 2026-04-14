@@ -36,6 +36,7 @@ team_t team = {
 
 /* single word (4) or double word (8) alignment */
 #define ALIGNMENT 8
+#define DOUBLE_WORD_SIZE 8
 #define WORD_SIZE 4
 
 /* rounds up to the nearest multiple of ALIGNMENT */
@@ -52,6 +53,7 @@ team_t team = {
 /* block pointer의 헤더의 시작주소를 반환한다. bp는 항상 페이로드의 시작주소를 가르키고 있다. */
 #define HDRP(bp) (char *)(bp) - WORD_SIZE
 #define FDRP(bp) (char *)(bp) - ALIGNMENT
+#define FTRP(bp) ((char *)(bp) + (GET_SIZE(HDRP(bp))) - ALIGNMENT)
 
 #define NEXT_BLOCK_PTR(bp) ((char *)(bp) + (GET_SIZE(HDRP(bp))))
 #define PREV_BLOCK_PTR(bp) ((char *)(bp) - (GET_SIZE(FDRP(bp))))
@@ -114,46 +116,43 @@ void *coalesing(void *bp)
     void *prev_block = PREV_BLOCK_PTR(bp);
     void *next_block = NEXT_BLOCK_PTR(bp);
 
-    printf("prev_block: %d\n", GET_ALLOC(HDRP(prev_block)));
-    printf("next_block: %d\n", GET_ALLOC(HDRP(next_block)));
-
     // case1 앞 뒤 모두 할당중일때
     if (GET_ALLOC(HDRP(prev_block)) && GET_ALLOC(HDRP(next_block)))
         return bp;
     // case2 앞만 할당중 (뒤가 free)
-    // else if (GET_ALLOC(prev_block))
-    // {
-    //     // 현재 블록과 뒷 블록의 사이즈를 합친다.
-    //     // 앞의 블록의 헤더와 푸터를 변형한다.
-    //     size_t aszie = GET_SIZE(HDRP(bp)) + GET_SIZE(HDRP(next_block));
+    else if (GET_ALLOC(prev_block))
+    {
+        // 현재 블록과 뒷 블록의 사이즈를 합친다.
+        // 앞의 블록의 헤더와 푸터를 변형한다.
+        size_t aszie = GET_SIZE(HDRP(bp)) + GET_SIZE(HDRP(next_block));
 
-    //     PUT(HDRP(bp), PATCH(aszie, 0));
-    //     PUT(FDRP(next_block), PATCH(aszie, 0));
+        PUT(HDRP(bp), PATCH(aszie, 0));
+        PUT(FTRP(next_block), PATCH(aszie, 0));
 
-    //     return bp;
-    // }
-    // // case3 뒤만 할당중 (앞이 free)
-    // else if (GET_ALLOC(next_block))
-    // {
-    //     // 현재 블록과 뒷 블록의 사이즈를 합친다.
-    //     // 앞의 블록의 헤더와 푸터를 변형한다.
-    //     size_t aszie = GET_SIZE(HDRP(bp)) + GET_SIZE(FDRP(prev_block));
+        return bp;
+    }
+    // case3 뒤만 할당중 (앞이 free)
+    else if (GET_ALLOC(next_block))
+    {
+        // 현재 블록과 앞 블록의 사이즈를 합친다.
+        // 앞의 블록의 헤더와 푸터를 변형한다.
+        size_t aszie = GET_SIZE(FTRP(prev_block)) + GET_SIZE(HDRP(bp));
 
-    //     PUT(HDRP(prev_block), PATCH(aszie, 0));
-    //     PUT(FDRP(bp), PATCH(aszie, 0));
+        PUT(HDRP(prev_block), PATCH(aszie, 0));
+        PUT(FTRP(bp), PATCH(aszie, 0));
 
-    //     return prev_block;
-    // }
-    // // case4 앞 뒤 free
-    // else
-    // {
-    //     size_t aszie = GET_SIZE(HDRP(bp)) + GET_SIZE(FDRP(prev_block)) ;
+        return prev_block;
+    }
+    // case4 앞 뒤 free
+    else
+    {
+        size_t aszie = GET_SIZE(FTRP(prev_block)) + GET_SIZE(HDRP(bp)) + GET_SIZE(HDRP(next_block));
 
-    //     PUT(HDRP(prev_block), PATCH(aszie, 0));
-    //     PUT(FDRP(bp), PATCH(aszie, 0));
+        PUT(HDRP(prev_block), PATCH(aszie, 0));
+        PUT(FTRP(next_block), PATCH(aszie, 0));
 
-    //     return prev_block;
-    // }
+        return prev_block;
+    }
 
     return NULL;
 }
@@ -180,6 +179,15 @@ void *mm_malloc(size_t size)
  */
 void mm_free(void *ptr)
 {
+    if (ptr == NULL)
+        return;
+
+    size_t size = GET_SIZE(HDRP(ptr));
+
+    PUT(HDRP(ptr), PATCH(size, 0));
+    PUT(FTRP(ptr), PATCH(size, 0));
+
+    coalesing(ptr);
 }
 
 /*
