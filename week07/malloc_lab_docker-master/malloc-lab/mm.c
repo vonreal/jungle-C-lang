@@ -284,6 +284,9 @@ void *mm_realloc(void *ptr, size_t size)
     {
         PUT(HDRP(oldptr), PATCH(combined_size, 1));
         PUT(FTRP(oldptr), PATCH(combined_size, 1));
+        void *temp;
+        if ((temp = place(oldptr, copy_size)) != NULL)
+            return temp;
         return oldptr;
     }
 
