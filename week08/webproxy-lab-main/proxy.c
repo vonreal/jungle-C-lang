@@ -10,13 +10,15 @@ void doit(int fd);
 void parse_uri(char *uri, char *hostname, char *path, char *port);
 void build_http_header(char *http_header, char *hostname, char *path, rio_t *client_rio);
 void clienterror(int fd, char *cause, char *errnum, char *shortmsg, char *longmsg);
+void *thread(void *vargp);
 
 int main(int argc, char **argv)
 {
-  int listenfd, connfd;
+  int listenfd, *connfdp;
   char hostname[MAXLINE], port[MAXLINE];
   socklen_t clientlen;
   struct sockaddr_storage clientaddr;
+  pthread_t tid;
 
   /* 명령줄 인수 확인: 포트 번호 필수 */
   if (argc != 2)
@@ -31,21 +33,33 @@ int main(int argc, char **argv)
   /* 지정된 포트에서 수신 대기 소켓 오픈 */
   listenfd = Open_listenfd(argv[1]);
 
-  /* 순차적 웹 프록시 기본 루프 (1단계 요구사항)*/
+  /* 다중 동시 연결 처리 루프 (2단계 요구사항) */
   while (1)
   {
     clientlen = sizeof(clientaddr);
-    connfd = Accept(listenfd, (SA *)&clientaddr, &clientlen);
+
+    /* connfd를 힙에 할당: 스택 변수를 넘기면 루프가 덮어쓰기 전에 스레드가
+     * 읽는다는 보장이 없어 레이스 컨디션 발생 */
+    connfdp = Malloc(sizeof(int));
+    *connfdp = Accept(listenfd, (SA *)&clientaddr, &clientlen);
     Getnameinfo((SA *)&clientaddr, clientlen, hostname, MAXLINE, port, MAXLINE, 0);
     printf("Accepted connection from (%s, %s)\n", hostname, port);
 
-    /* 클라이언트 요청 처리 */
-    doit(connfd);
-
-    /* 처리가 끝나면 연결 식별자 닫기*/
-    Close(connfd);
+    /* 요청마다 새 스레드 생성 후 즉시 detach — 메모리 누수 방지 */
+    Pthread_create(&tid, NULL, thread, connfdp);
+    Pthread_detach(tid);
   }
   return 0;
+}
+
+/* 각 스레드가 실행할 함수: doit 호출 후 소켓과 힙 메모리 해제 */
+void *thread(void *vargp)
+{
+  int connfd = *((int *)vargp);
+  Free(vargp);
+  doit(connfd);
+  Close(connfd);
+  return NULL;
 }
 
 void doit(int fd)
