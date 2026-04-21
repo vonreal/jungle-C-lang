@@ -204,10 +204,10 @@ void doit(int fd)
 
 int main(int argc, char **argv)
 {
-  int listenfd, connfd;
-  char hostname[MAXLINE], port[MAXLINE];
-  socklen_t clientlen;
-  struct sockaddr_storage clientaddr;
+  int listenfd, connfd;                  // 리스닝 식별자, 연결 식별자 선언
+  char hostname[MAXLINE], port[MAXLINE]; // 클라이언트의 호스트 이름(도메인 이름 또는 IP 주소 문자열)과 포트 번호를 문자열 형태로 저장할 버퍼
+  socklen_t clientlen;                   // 소켓 주소 구조체의 크기(길이)를 저장할 변수
+  struct sockaddr_storage clientaddr;    // 접속한 클라이언트의 소켓 주소 정보를 담을 구조체 sockaddr_in 대신 sockaddr_storage는 프로토콜 독립적인 코드
 
   /* Check command line args */
   if (argc != 2)
@@ -216,10 +216,10 @@ int main(int argc, char **argv)
     exit(1);
   }
 
-  listenfd = Open_listenfd(argv[1]);
-  while (1)
+  listenfd = Open_listenfd(argv[1]); // socket() -> bind() -> listen() 한 번에 처리
+  while (1)                          // 한 번에 하나의 클라이언트만 순차적으로 처리하는 iterative server
   {
-    clientlen = sizeof(clientaddr);
+    clientlen = sizeof(clientaddr); // clientaddr 구조체의 크기를 계산하여 clientlen 변수 초기화
     connfd = Accept(listenfd, (SA *)&clientaddr,
                     &clientlen); // line:netp:tiny:accept
     Getnameinfo((SA *)&clientaddr, clientlen, hostname, MAXLINE, port, MAXLINE,
